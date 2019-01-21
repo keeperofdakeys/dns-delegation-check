@@ -1,0 +1,8 @@
+[package]
+name = "dns-delegation-check"
+version = "0.1.0"
+authors = ["Josh Driver <josh@netcraft.com.au>"]
+edition = "2018"
+
+[dependencies]
+trust-dns = "0.15.0"
