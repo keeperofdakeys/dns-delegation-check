@@ -1,7 +1,8 @@
 use std::collections::BTreeMap;
 use std::net::{Ipv4Addr, Ipv6Addr, IpAddr};
-use trust_dns::rr::RecordType;
-use trust_dns::rr::RData;
+use std::str::FromStr;
+use trust_dns::rr::{RecordType, RData};
+use trust_dns::rr;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Domain {
@@ -55,6 +56,12 @@ impl RecordDB {
     }
   }
 
+  /// Add root hints to Record Database.
+  ///
+  /// Given a list of hosts and ips, A/AAAA records and root NS
+  /// records will be added to the record database. These entries
+  /// will be marked as hints, and only used to bootstrap lookups
+  /// of initial root zone information.
   pub fn add_root_hints(&mut self, hints: Vec<(Domain, IpAddr)>) {
     for ((domain, ip)) in hints {
       let rdata = match ip {
@@ -63,14 +70,30 @@ impl RecordDB {
       };
 
       self.records
-        .entry(domain).or_insert_with(|| BTreeMap::new())
+        .entry(domain.clone()).or_insert_with(|| BTreeMap::new())
         .entry(RServer::Hint).and_modify(|e| {
-          match e {
-            REntry::Entries(v) => v.push(rdata.clone()),
-            // Hints shouldn't timeout or return nx, so don't
-            // modify it.
-            _ => {},
-          };
+          if let REntry::Entries(v) = e {
+            v.push(rdata.clone());
+            return;
+          }
+          // Hints shouldn't timeout or return nx, so replace
+          // anything else with an entry.
+          *e = REntry::Entries(vec![rdata.clone()]);
+        }).or_insert_with(|| REntry::Entries(vec![rdata.clone()]));
+
+      let domain_s: String = domain.into();
+      let rdata = RData::NS(rr::Name::from_str(&domain_s).unwrap());
+
+      self.records
+      .entry(".".into()).or_insert_with(|| BTreeMap::new())
+      .entry(RServer::Hint).and_modify(|e| {
+          if let REntry::Entries(v) = e {
+            v.push(rdata.clone());
+            return;
+          }
+          // Hints shouldn't timeout or return nx, so replace
+          // anything else with an entry.
+          *e = REntry::Entries(vec![rdata.clone()]);
         }).or_insert_with(|| REntry::Entries(vec![rdata.clone()]));
     }
   }
