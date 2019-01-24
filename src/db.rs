@@ -28,11 +28,6 @@ pub enum REntry {
   Entries(Vec<RData>),
 }
 
-#[derive(Debug)]
-pub struct RecordDB {
-  records: BTreeMap<rr::Name, BTreeMap<RServer, REntry>>,
-}
-
 #[derive(PartialEq, Eq, PartialOrd, Ord)]
 pub struct RDataHash(rr::RData);
 
@@ -62,11 +57,17 @@ impl Hash for RDataHash {
   }
 }
 
+#[derive(Debug)]
+pub struct RecordDB {
+  records: BTreeMap<rr::Name, BTreeMap<RServer, REntry>>,
+  targets: Vec<(rr::Name, rr::RecordType)>,
+}
 
 impl RecordDB {
   pub fn new() -> RecordDB {
     RecordDB {
       records: BTreeMap::new(),
+      targets: Vec::new(),
     }
   }
 
@@ -126,6 +127,10 @@ impl RecordDB {
       }).or_insert_with(|| REntry::Entries(vec![record.rdata().clone()]));
   }
 
+  /// For the given domain name, retrieve all records of given record type.
+  ///
+  /// Note that this will fetch all known answers, combining those from
+  /// multiple servers and hints.
   pub fn get_record_set(&self, name: &rr::Name, rtype: rr::RecordType)
     -> Vec<rr::RData> {
     let servers = match self.records.get(name) {
@@ -146,5 +151,9 @@ impl RecordDB {
     }
 
     records.into_iter().map(|RDataHash(item)| item).collect()
+  }
+
+  fn add_target(&mut self, name: &rr::Name, rtype: rr::RecordType) {
+    self.targets.push((name.clone(), rtype));
   }
 }

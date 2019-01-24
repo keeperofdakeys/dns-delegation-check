@@ -11,6 +11,8 @@ fn main() {
   // Bootstrap database with root hints.
   records.add_root_hints(dns::root_hints());
 
+  records.add_target(&rr::Name::from_str("google.com"), rr::RecordType::AAAA);
+
   dns::query_record(&mut records, "8.8.8.8".parse().unwrap(),
                     rr::Name::from_str(".").unwrap(), rr::RecordType::NS);
 
