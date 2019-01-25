@@ -153,7 +153,35 @@ impl RecordDB {
     records.into_iter().map(|RDataHash(item)| item).collect()
   }
 
-  fn add_target(&mut self, name: &rr::Name, rtype: rr::RecordType) {
+  pub fn add_target(&mut self, name: &rr::Name, rtype: rr::RecordType) {
     self.targets.push((name.clone(), rtype));
+  }
+
+  /// Given a domain, find the longest matching domain in the database that
+  /// matches the en d of the domain.
+  pub fn find_closest_domain(&self, name: &rr::Name) -> rr::Name {
+    let (mut match_name, mut match_count) = (rr::Name::from_str(".").unwrap(), 0);
+
+    for rname in self.records.keys() {
+      if !rname.zone_of(name) {
+        continue;
+      }
+
+      // TODO: We already know that rname is a valid tail of name, it
+      //       should be safe to just count the number of labelss in rname
+      //       here.
+      let this_match_count =
+        rname.iter().rev()
+          .zip(name.iter().rev())
+          .filter(|(a, b)| a == b)
+          .count();
+
+      if this_match_count > match_count {
+        match_name = rname.clone();
+        match_count = this_match_count;
+      }
+    }
+
+    match_name
   }
 }
