@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashSet, VecDeQue};
 use std::hash::{Hash, Hasher};
 use std::net::{Ipv4Addr, Ipv6Addr, IpAddr};
 use std::str::FromStr;
@@ -31,12 +31,6 @@ pub enum REntry {
 #[derive(PartialEq, Eq, PartialOrd, Ord)]
 pub struct RDataHash(rr::RData);
 
-impl RDataHash {
-  pub fn new(rdata: rr::RData) -> RDataHash {
-    RDataHash(rdata)
-  }
-}
-
 impl Hash for RDataHash {
   fn hash<H: Hasher>(&self, state: &mut H) {
     match &self.0 {
@@ -60,14 +54,18 @@ impl Hash for RDataHash {
 #[derive(Debug)]
 pub struct RecordDB {
   records: BTreeMap<rr::Name, BTreeMap<RServer, REntry>>,
-  targets: Vec<(rr::Name, rr::RecordType)>,
+  targets: HashSet<(rr::Name, rr::RecordType)>,
+  _targets: HashSet<(rr::Name, rr::RecordType, rr::Name)>,
+  query_queue: VecDeque<(rr::Name, rr::RecordType, IpAddr)>,
 }
 
 impl RecordDB {
   pub fn new() -> RecordDB {
     RecordDB {
       records: BTreeMap::new(),
-      targets: Vec::new(),
+      targets: HashSet::new(),
+      _targets: HashSet::new(),
+      query_queue: VecDeque::new(),
     }
   }
 
@@ -154,7 +152,8 @@ impl RecordDB {
   }
 
   pub fn add_target(&mut self, name: &rr::Name, rtype: rr::RecordType) {
-    self.targets.push((name.clone(), rtype));
+    self.targets.insert((name.clone(), rtype));
+    self._targets.insert((name.clone(), rtype, rr::Name::from_str(".")));
   }
 
   /// Given a domain, find the longest matching domain in the database that
@@ -183,5 +182,43 @@ impl RecordDB {
     }
 
     match_name
+  }
+
+  /// Generate internal DNS queries needed to further resolve targets.
+  pub fn generate_queries(&mut self) {
+    let mut missing_entries = 0;
+
+    // For each _target, find any missing records, and generate queries
+    // needed to fetch them.
+    for (name, rtype, zone) in self._targets {
+      // Ensure domain exists in answers.
+      let name_records = match self.records.get(name) {
+        Some(r) => r,
+        None => continue;
+      };
+      // Get list of NS servers for zone.
+      let zone_ns = self.get_record_set(zone, rr::RecordType::NS);
+
+      // For each NS server of zone, ensure an answer exists for name
+      // from that NS server.
+      for ns in zone_ns {
+        if !self.records.contains_key(ns.into()) {
+          let ips = self.get_record_set(ns, rr::RecordType::A);
+
+          // If we have no ips skip for now, we'll check and fix these
+          // later.
+          if ips.len() == 0 {
+            missing_entries += 1;
+          } else {
+            missing_entries += 1;
+            for ip in ips {
+              self.query_queue.push_front((name, rtype, IpAddr::V4(ip)));
+            }
+          }
+        }
+      }
+    }
+
+
   }
 }
