@@ -19,4 +19,6 @@ fn main() {
                     rr::Name::from_str(".").unwrap(), rr::RecordType::NS);
 
   println!("{:#?}", records.get_record_set(&rr::Name::from_str(".").unwrap(), rr::RecordType::NS));
+
+  println!("{:#?}", records);
 }

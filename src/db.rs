@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashSet, VecDeQue};
+use std::collections::{BTreeMap, HashSet, VecDeque};
 use std::hash::{Hash, Hasher};
 use std::net::{Ipv4Addr, Ipv6Addr, IpAddr};
 use std::str::FromStr;
@@ -153,7 +153,8 @@ impl RecordDB {
 
   pub fn add_target(&mut self, name: &rr::Name, rtype: rr::RecordType) {
     self.targets.insert((name.clone(), rtype));
-    self._targets.insert((name.clone(), rtype, rr::Name::from_str(".")));
+    // TODO: Remove unwrap
+    self._targets.insert((name.clone(), rtype, rr::Name::from_str(".").unwrap()));
   }
 
   /// Given a domain, find the longest matching domain in the database that
@@ -190,11 +191,11 @@ impl RecordDB {
 
     // For each _target, find any missing records, and generate queries
     // needed to fetch them.
-    for (name, rtype, zone) in self._targets {
+    for (name, rtype, zone) in &self._targets {
       // Ensure domain exists in answers.
       let name_records = match self.records.get(name) {
         Some(r) => r,
-        None => continue;
+        None => continue,
       };
       // Get list of NS servers for zone.
       let zone_ns = self.get_record_set(zone, rr::RecordType::NS);
@@ -202,8 +203,9 @@ impl RecordDB {
       // For each NS server of zone, ensure an answer exists for name
       // from that NS server.
       for ns in zone_ns {
-        if !self.records.contains_key(ns.into()) {
-          let ips = self.get_record_set(ns, rr::RecordType::A);
+        let ns = ns.as_ns().unwrap();
+        if !self.records.contains_key(ns) {
+          let ips = self.get_record_set(&ns, rr::RecordType::A);
 
           // If we have no ips skip for now, we'll check and fix these
           // later.
@@ -212,7 +214,8 @@ impl RecordDB {
           } else {
             missing_entries += 1;
             for ip in ips {
-              self.query_queue.push_front((name, rtype, IpAddr::V4(ip)));
+              let ip = ip.to_ip_addr().unwrap();
+              self.query_queue.push_front((name.clone(), rtype.clone(), ip));
             }
           }
         }
