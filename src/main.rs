@@ -13,12 +13,14 @@ fn main() {
 
   records.add_target(&rr::Name::from_str("google.com").unwrap(), rr::RecordType::AAAA);
 
-  println!("{:#?}", records.find_closest_domain(&rr::Name::from_str("google.com.").unwrap()));
+  // println!("{:#?}", records.find_closest_domain(&rr::Name::from_str("google.com.").unwrap()));
 
   dns::query_record(&mut records, "8.8.8.8".parse().unwrap(),
-                    rr::Name::from_str(".").unwrap(), rr::RecordType::NS);
+                    rr::Name::from_str("google.com.").unwrap(), rr::RecordType::NS);
 
-  println!("{:#?}", records.get_record_set(&rr::Name::from_str(".").unwrap(), rr::RecordType::NS));
+  records.generate_queries();
+  println!("{:#?}", records);
+  records.perform_queries();
 
   println!("{:#?}", records);
 }

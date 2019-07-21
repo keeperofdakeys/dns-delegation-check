@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, HashSet, VecDeque};
 use std::hash::{Hash, Hasher};
 use std::net::{Ipv4Addr, Ipv6Addr, IpAddr};
 use std::str::FromStr;
+use super::dns;
 use trust_dns::rr::{RecordType, RData};
 use trust_dns::rr;
 
@@ -221,7 +222,13 @@ impl RecordDB {
         }
       }
     }
+  }
 
-
+  /// Perform queries in _targets.
+  pub fn perform_queries(&mut self) {
+    while let Some(query) = self.query_queue.pop_front() {
+      let (name, rtype, ip) = query;
+      super::dns::query_record(self, ip, name, rtype);
+    }
   }
 }
