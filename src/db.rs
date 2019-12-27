@@ -24,8 +24,11 @@ impl From<IpAddr> for RServer {
 
 #[derive(Debug, Clone)]
 pub enum REntry {
+  /// No Entry (NXDomain, Not Authoritative, etc).
   NoEntry,
+  /// Query timeout.
   TimeOut,
+  /// Answers.
   Entries(Vec<RData>),
 }
 
@@ -55,8 +58,8 @@ impl Hash for RDataHash {
 #[derive(Debug)]
 pub struct RecordDB {
   records: BTreeMap<rr::Name, BTreeMap<RServer, REntry>>,
-  targets: HashSet<(rr::Name, rr::RecordType)>,
-  _targets: HashSet<(rr::Name, rr::RecordType, rr::Name)>,
+  answer_targets: HashSet<(rr::Name, rr::RecordType)>,
+  targets: HashSet<(rr::Name, rr::RecordType, rr::Name)>,
   query_queue: VecDeque<(rr::Name, rr::RecordType, IpAddr)>,
 }
 
@@ -65,7 +68,7 @@ impl RecordDB {
     RecordDB {
       records: BTreeMap::new(),
       targets: HashSet::new(),
-      _targets: HashSet::new(),
+      answer_targets: HashSet::new(),
       query_queue: VecDeque::new(),
     }
   }
@@ -126,6 +129,15 @@ impl RecordDB {
       }).or_insert_with(|| REntry::Entries(vec![record.rdata().clone()]));
   }
 
+  /// For the given domain name, retrieve all records for all NS IPs under it.
+  pub fn get_records(&self, name: &rr::Name)
+    -> BTreeMap<RServer, REntry> {
+    match self.records.get(name) {
+      Some(s) => s.clone(),
+      None => BTreeMap::new(),
+    }
+  }
+
   /// For the given domain name, retrieve all records of given record type.
   ///
   /// Note that this will fetch all known answers, combining those from
@@ -137,14 +149,14 @@ impl RecordDB {
       None    => return Vec::new(),
     };
 
-    let mut records = HashSet::new();;
+    let mut records = HashSet::new();
 
     for (server, entry) in servers {
       if let REntry::Entries(items) = entry {
         for item in items {
           if item.to_record_type() == rtype {
             records.insert(RDataHash(item.clone()));
-          }
+         }
         }
       }
     }
@@ -152,14 +164,15 @@ impl RecordDB {
     records.into_iter().map(|RDataHash(item)| item).collect()
   }
 
+  /// Add a domain and rtype as a final target to provide an answer for.
   pub fn add_target(&mut self, name: &rr::Name, rtype: rr::RecordType) {
-    self.targets.insert((name.clone(), rtype));
+    self.answer_targets.insert((name.clone(), rtype));
     // TODO: Remove unwrap
-    self._targets.insert((name.clone(), rtype, rr::Name::from_str(".").unwrap()));
+    self.targets.insert((name.clone(), rtype, rr::Name::from_str(".").unwrap()));
   }
 
   /// Given a domain, find the longest matching domain in the database that
-  /// matches the en d of the domain.
+  /// matches the end of the domain.
   pub fn find_closest_domain(&self, name: &rr::Name) -> rr::Name {
     let (mut match_name, mut match_count) = (rr::Name::from_str(".").unwrap(), 0);
 
@@ -190,14 +203,76 @@ impl RecordDB {
   pub fn generate_queries(&mut self) {
     let mut missing_entries = 0;
 
-    // For each _target, find any missing records, and generate queries
-    // needed to fetch them.
-    for (name, rtype, zone) in &self._targets {
+    // // For each _target, find any missing records, and generate queries
+    // // needed to fetch them.
+    // for (name, rtype, zone) in &self.answer_targets {
+    //   // Ensure domain exists in answers.
+    //   let name_records = match self.records.get(name) {
+    //     Some(r) => r,
+    //     None => continue,
+    //   };
+    //   // Get list of NS servers for zone.
+    //   let zone_ns = self.get_record_set(zone, rr::RecordType::NS);
+
+    //   // For each NS server of zone, ensure an answer exists for name
+    //   // from that NS server.
+    //   for ns in zone_ns {
+    //     let ns = ns.as_ns().unwrap();
+    //     if !self.records.contains_key(ns) {
+    //       // FIXME: Do I want record set for zone instead of ns?
+    //       // If no domain record for ns, then no a records possible?
+    //       let ips = self.get_record_set(&ns, rr::RecordType::A);
+
+    //       // If we have no ips skip for now, we'll check and fix these
+    //       // later.
+    //       if ips.len() == 0 {
+    //         missing_entries += 1;
+    //       } else {
+    //         missing_entries += 1;
+    //         for ip in ips {
+    //           let ip = ip.to_ip_addr().unwrap();
+    //           self.query_queue.push_front((name.clone(), rtype.clone(), ip));
+    //         }
+    //       }
+    //     }
+    //   }
+    // }
+
+    // for each _target
+    //   for each ns of zone
+    //     if no record for name, rtype record at ns record
+    //       queue query
+    //     insert into ns servers to check
+    //
+    // for each ns server to check
+    //   zone = cloest domain
+    //   get record set of ips for zone
+    //   verify all ns' of zone are present, and correct
+
+    // FIXME: Need to verify that all ns servers for all ns'
+    //
+    // TODO:
+    // 1. Add queries for targets, answer_targets may contain auth'd
+    //    zones to reference against for here.
+    // 2. Verify all ns servers of longest zone of targets in
+    //    answer_targets have the requested record rtype (data or missed).
+    // 3. Verify all ns servers of zones of targets in answer_targets
+    //    have ns records and A/AAAA records from all name servers.
+    //    (Having those ns records ensures this group is complete).
+    // 4. Either return list of missing records, or have logic to
+    //    continue until no more queries are generated.
+    
+    // For each answer target, ensure targets contains the longest matching
+    // zone.
+    for (name, rtype) in &self.answer_targets {
+      // Add targets for NS of zones?
+    }
+
+    // For each target, ensure a record exists for all known NS servers.
+    for (name, rtype, zone) in &self.targets {
       // Ensure domain exists in answers.
-      let name_records = match self.records.get(name) {
-        Some(r) => r,
-        None => continue,
-      };
+      let name_records = self.get_records(name);
+
       // Get list of NS servers for zone.
       let zone_ns = self.get_record_set(zone, rr::RecordType::NS);
 
@@ -205,16 +280,19 @@ impl RecordDB {
       // from that NS server.
       for ns in zone_ns {
         let ns = ns.as_ns().unwrap();
-        if !self.records.contains_key(ns) {
-          let ips = self.get_record_set(&ns, rr::RecordType::A);
 
-          // If we have no ips skip for now, we'll check and fix these
-          // later.
-          if ips.len() == 0 {
+          // FIXME: Do I want record set for zone instead of ns?
+          // If no domain record for ns, then no a records possible?
+        let ns_ips = self.get_record_set(&ns, rr::RecordType::A);
+        if ns_ips.len() == 0 {
+          missing_entries += 1;
+        }
+
+        for ip in &ns_ips {
+          let ip = ip.to_ip_addr().unwrap();
+          if !name_records.contains_key(&ip.into()) {
             missing_entries += 1;
-          } else {
-            missing_entries += 1;
-            for ip in ips {
+            for ip in &ns_ips {
               let ip = ip.to_ip_addr().unwrap();
               self.query_queue.push_front((name.clone(), rtype.clone(), ip));
             }
@@ -224,11 +302,15 @@ impl RecordDB {
     }
   }
 
-  /// Perform queries in _targets.
+  /// Perform queries from queue.
   pub fn perform_queries(&mut self) {
     while let Some(query) = self.query_queue.pop_front() {
       let (name, rtype, ip) = query;
+      // TODO: We should be parsing results here.
+      // TODO: How do we do mocking here?
       super::dns::query_record(self, ip, name, rtype);
+      // TODO: If any auth messages exist, and query is in targets,
+      // add to answer_targets with appropriate zone.
     }
   }
 }
