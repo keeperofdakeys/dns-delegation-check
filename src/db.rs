@@ -309,8 +309,6 @@ impl RecordDB {
       // TODO: We should be parsing results here.
       // TODO: How do we do mocking here?
       super::dns::query_record(self, ip, name, rtype);
-      // TODO: If any auth messages exist, and query is in targets,
-      // add to answer_targets with appropriate zone.
     }
   }
 }

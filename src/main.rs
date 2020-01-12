@@ -20,7 +20,6 @@ fn main() {
 
   records.generate_queries();
   //println!("{:#?}", records);
-  println!("{:#?}", records);
   records.perform_queries();
   println!("{:#?}", records);
 

@@ -29,12 +29,20 @@ pub fn query_record(record_db: &mut db::RecordDB, server_ip: IpAddr,
   };
 
   for msg in result.messages() {
+    // Add query answers into database.
     for rec in msg.answers() {
       record_db.add_record(rec, server_ip);
     }
 
+    // Add additional answers (glue records) into database.
     for rec in msg.additionals() {
       record_db.add_record(rec, server_ip);
+    }
+
+    // Add any auth answers into the database.
+    for rec in msg.name_servers() {
+      record_db.add_record(rec, server_ip);
+      // TODO: Add new target here
     }
   }
 }
