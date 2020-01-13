@@ -339,13 +339,41 @@ impl RecordDB {
   }
 
   /// Dump database to stdout.
-  pub fn dump_db (&self) {
+  pub fn dump (&self) {
+    println!("Answer Targets");
+
+    for (name, rtype) in &self.answer_targets {
+      println!("  {} {}", name, rtype);
+    }
+
+    println!("Targets");
+
+    for (name, rtype, zone) in &self.targets {
+      println!("  {} {} {}", name, rtype, zone);
+    }
+
+    println!("Query Queue");
+
+    for (name, rtype, ip) in &self.query_queue {
+      println!("  {} {} {}", name, rtype, ip);
+    }
+
+    println!();
+
     for (name, entries) in &self.records {
       println!("Domain: {}", name);
 
-      for (ip, records) in entries {
+      for (ip, entry) in entries {
         println!("  Server IP: {:?}", ip);
-        println!("    {:?}", records);
+        match entry {
+          REntry::Entries(v) => {
+            for rdata in v {
+              println!("    Entries");
+              println!("      {:?}", rdata);
+            }
+          },
+          e => println!("    {:?}", e),
+        }
       }
     }
   }
