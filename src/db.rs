@@ -184,10 +184,17 @@ impl RecordDB {
   }
 
   /// Add a domain and rtype as a final target to provide an answer for.
-  pub fn add_target(&mut self, name: &rr::Name, rtype: rr::RecordType) {
+  pub fn add_answer_target(&mut self, name: &rr::Name, rtype: rr::RecordType) {
     self.answer_targets.insert((name.clone(), rtype));
     // TODO: Remove unwrap
     self.targets.insert((name.clone(), rtype, rr::Name::from_str(".").unwrap()));
+  }
+
+  /// Add a domain, rtype and target zone as a target.
+  ///
+  /// Unlike answer targets, these areused as stepping stones internally.
+  pub fn add_target(&mut self, name: &rr::Name, rtype: rr::RecordType, zone: &rr::Name) {
+    self.targets.insert((name.clone(), rtype, zone.clone()));
   }
 
   /// Given a domain, find the longest matching domain in the database that

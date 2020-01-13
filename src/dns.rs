@@ -53,8 +53,11 @@ pub fn query_record(record_db: &mut db::RecordDB, server_ip: IpAddr,
 
     // Add any auth answers into the database.
     for rec in msg.name_servers() {
+      // Add record.
       record_db.add_record(rec, server_ip);
-      // TODO: Add new target here
+
+      // Add target for new authoritative zone.
+      record_db.add_target(&name, record_type, rec.name());
     }
   }
 
