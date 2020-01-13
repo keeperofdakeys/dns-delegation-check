@@ -21,7 +21,7 @@ fn main() {
   records.generate_queries();
   //println!("{:#?}", records);
   records.perform_queries();
-  println!("{:#?}", records);
+  records.dump_db();
 
   //println!("{:#?}", records);
 }

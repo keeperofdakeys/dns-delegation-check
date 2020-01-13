@@ -311,4 +311,16 @@ impl RecordDB {
       super::dns::query_record(self, ip, name, rtype);
     }
   }
+
+  /// Dump database to stdout.
+  pub fn dump_db (&self) {
+    for (name, entries) in &self.records {
+      println!("Domain: {}", name);
+
+      for (ip, records) in entries {
+        println!("  Server IP: {:?}", ip);
+        println!("    {:?}", records);
+      }
+    }
+  }
 }
