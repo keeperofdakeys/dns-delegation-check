@@ -1,7 +1,7 @@
 use std::net::{Ipv4Addr, Ipv6Addr, IpAddr};
 use std::str::FromStr;
 use trust_dns::client::{Client,ClientConnection, ClientStreamHandle, SyncClient};
-use trust_dns::error::ClientResult;
+use trust_dns::error::{ClientErrorKind, ClientResult};
 use trust_dns::op::DnsResponse;
 use trust_dns::rr;
 use trust_dns::udp::UdpClientConnection;
@@ -25,13 +25,25 @@ pub fn query_record(record_db: &mut db::RecordDB, server_ip: IpAddr,
                     name: rr::Name, record_type: rr::RecordType) {
   let result = match do_dns_query(server_ip, &name, record_type) {
     Ok(r) => r,
-    Err(_) => unimplemented!("We don't handle errors yet"),
+    Err(e) => {
+      match e.kind() {
+        // TODO: Add retries on timeout.
+        ClientErrorKind::Timeout =>
+          record_db.add_rentry(&name, db::REntry::TimeOut, server_ip),
+        // FIXME: More appropriate error?
+        _ => unimplemented!("We don't handle this  error yet: {}", e),
+      };
+      return;
+    },
   };
+
+  let mut has_answer = false;
 
   for msg in result.messages() {
     // Add query answers into database.
     for rec in msg.answers() {
       record_db.add_record(rec, server_ip);
+      has_answer = true;
     }
 
     // Add additional answers (glue records) into database.
@@ -44,6 +56,10 @@ pub fn query_record(record_db: &mut db::RecordDB, server_ip: IpAddr,
       record_db.add_record(rec, server_ip);
       // TODO: Add new target here
     }
+  }
+
+  if !has_answer {
+    record_db.add_rentry(&name, db::REntry::NoEntry, server_ip);
   }
 }
 

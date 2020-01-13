@@ -114,6 +114,7 @@ impl RecordDB {
     }
   }
 
+  // Add a record to the database, marking that its from the specificed NS IP.
   pub fn add_record(&mut self, record: &rr::Record, server_ip: IpAddr) {
     self.records
       .entry(record.name().clone()).or_insert_with(|| BTreeMap::new())
@@ -127,6 +128,24 @@ impl RecordDB {
             *e = REntry::Entries(vec![record.rdata().clone()]),
         }
       }).or_insert_with(|| REntry::Entries(vec![record.rdata().clone()]));
+  }
+
+  pub fn add_rentry(&mut self, name: &rr::Name, rentry: REntry, server_ip: IpAddr) {
+    self.records
+      .entry(name.clone()).or_insert_with(|| BTreeMap::new())
+      .entry(server_ip.into())
+      .and_modify(|e| {
+        match e {
+          REntry::Entries(_) => (),
+          e @ REntry::TimeOut =>
+            *e = rentry.clone(),
+          e @ REntry::NoEntry =>
+            match rentry {
+              REntry::TimeOut => *e = REntry::NoEntry,
+              _ => (),
+            },
+        };
+      }).or_insert_with(|| rentry.clone());
   }
 
   /// For the given domain name, retrieve all records for all NS IPs under it.
