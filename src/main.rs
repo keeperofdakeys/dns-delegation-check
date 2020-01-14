@@ -19,7 +19,6 @@ fn main() {
                     rr::Name::from_str("google.com.").unwrap(), rr::RecordType::NS);
 
   records.action_loop();
-  records.generate_queries();
   records.dump();
 
   //println!("{:#?}", records);
