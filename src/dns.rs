@@ -1,11 +1,14 @@
+use crate::db;
+
 use std::net::{IpAddr};
 use std::str::FromStr;
+
+use log::{error, warn, info, debug, trace};
 use trust_dns_client::client::{Client, ClientHandle, SyncClient};
 use trust_dns_client::error::{ClientErrorKind, ClientResult};
 use trust_dns_client::op::DnsResponse;
 use trust_dns_client::rr;
 use trust_dns_client::udp::UdpClientConnection;
-use crate::db;
 
 /// Perform a DNS query.
 ///
@@ -17,12 +20,17 @@ pub fn do_dns_query(server_ip: IpAddr, name: &rr::Name, record_type: rr::RecordT
       (server_ip, 53).into()
     ).unwrap()
   );
+
+  trace!("Dns query: dig '{}' '{}' '@{}'", name, record_type, server_ip);
+
   client.query(name, rr::DNSClass::IN, record_type)
 }
 
 /// Query a givern record and add it to database.
 pub fn query_record(record_db: &mut db::RecordDB, server_ip: IpAddr,
                     name: rr::Name, record_type: rr::RecordType) {
+  debug!("Query record {}, {}, {}", name, record_type, server_ip);
+
   let result = match do_dns_query(server_ip, &name, record_type) {
     Ok(r) => r,
     Err(e) => {
@@ -36,6 +44,8 @@ pub fn query_record(record_db: &mut db::RecordDB, server_ip: IpAddr,
       return;
     },
   };
+
+  trace!("Got answer: {:?}", result);
 
   let mut has_answer = false;
 

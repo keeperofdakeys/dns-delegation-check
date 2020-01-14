@@ -3,6 +3,7 @@ use std::hash::{Hash, Hasher};
 use std::net::{Ipv4Addr, Ipv6Addr, IpAddr};
 use std::str::FromStr;
 
+use log::{error, warn, info, debug, trace};
 use trust_dns_client::rr::{RData};
 use trust_dns_client::rr;
 
@@ -82,6 +83,7 @@ impl RecordDB {
   /// will be marked as hints, and only used to bootstrap lookups
   /// of initial root zone information.
   pub fn add_root_hints(&mut self, hints: Vec<(rr::Name, IpAddr)>) {
+    debug!("Adding root hints");
     for (name, ip) in hints {
       let rdata = match ip {
         IpAddr::V4(ip) => RData::A(ip),
@@ -118,6 +120,7 @@ impl RecordDB {
 
   // Add a record to the database, marking that its from the specificed NS IP.
   pub fn add_record(&mut self, record: &rr::Record, server_ip: IpAddr) {
+    trace!("Add record {}, {:?}, {}", record.name(), record.rdata(), server_ip);
     self.change_num += 1;
     self.records
       .entry(record.name().clone()).or_insert_with(|| BTreeMap::new())
@@ -134,6 +137,7 @@ impl RecordDB {
   }
 
   pub fn add_rentry(&mut self, name: &rr::Name, rentry: REntry, server_ip: IpAddr) {
+    trace!("Add rentry {}, {:?}, {}", name, rentry, server_ip);
     self.change_num += 1;
     self.records
       .entry(name.clone()).or_insert_with(|| BTreeMap::new())
@@ -189,9 +193,13 @@ impl RecordDB {
 
   /// Add a domain and rtype as a final target to provide an answer for.
   pub fn add_answer_target(&mut self, name: &rr::Name, rtype: rr::RecordType) {
-    self.answer_targets.insert((name.clone(), rtype));
+    if self.answer_targets.insert((name.clone(), rtype)) {
+      debug!("Add answer target {}, {}", name, rtype);
+    }
     // TODO: Remove unwrap
-    self.targets.insert((name.clone(), rtype, rr::Name::from_str(".").unwrap()));
+    if self.targets.insert((name.clone(), rtype, rr::Name::from_str(".").unwrap())) {
+      debug!("Add target {}, {}, .", name, rtype);
+    }
     self.change_num += 1;
   }
 
@@ -204,7 +212,9 @@ impl RecordDB {
   ///
   /// Unlike answer targets, these areused as stepping stones internally.
   pub fn add_target(&mut self, name: &rr::Name, rtype: rr::RecordType, zone: &rr::Name) {
-    self.targets.insert((name.clone(), rtype, zone.clone()));
+    if self.targets.insert((name.clone(), rtype, zone.clone())) {
+      debug!("Add target {}, {}, {}", name, rtype, zone);
+    }
     self.change_num += 1;
   }
 
@@ -305,6 +315,8 @@ impl RecordDB {
       // Add targets for NS of zones?
     }
 
+    // FIXME: Add logging to this
+
     // For each target, ensure a record exists for all known NS servers.
     for (name, rtype, zone) in &self.targets {
       // Ensure domain exists in answers.
@@ -355,9 +367,9 @@ impl RecordDB {
 
     while change_num != self.change_num {
       change_num = self.change_num;
-      println!("loop {}", change_num);
       self.generate_queries();
       self.perform_queries();
+      debug!("Action loop, change num {}", change_num);
     }
   }
 

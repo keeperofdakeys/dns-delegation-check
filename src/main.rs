@@ -1,10 +1,13 @@
 use std::str::FromStr;
+
+use env_logger;
 use trust_dns_client::rr;
 
 mod db;
 mod dns;
 
 fn main() {
+  env_logger::init();
   // Create record database.
   let mut records = db::RecordDB::new();
 
