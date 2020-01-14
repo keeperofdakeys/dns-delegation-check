@@ -195,6 +195,11 @@ impl RecordDB {
     self.change_num += 1;
   }
 
+  /// Check if the given name and record type are in answer targets.
+  pub fn is_answer_target(&self, name: &rr::Name, rtype: rr::RecordType) -> bool {
+    self.answer_targets.contains(&(name.clone(), rtype))
+  }
+
   /// Add a domain, rtype and target zone as a target.
   ///
   /// Unlike answer targets, these areused as stepping stones internally.

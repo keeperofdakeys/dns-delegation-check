@@ -56,8 +56,10 @@ pub fn query_record(record_db: &mut db::RecordDB, server_ip: IpAddr,
       // Add record.
       record_db.add_record(rec, server_ip);
 
-      // Add target for new authoritative zone.
-      record_db.add_target(&name, record_type, rec.name());
+      // If this is an answer target, add new target for given new authoritative zone.
+      if record_db.is_answer_target(&name, record_type) {
+        record_db.add_target(&name, record_type, rec.name());
+      }
     }
   }
 
