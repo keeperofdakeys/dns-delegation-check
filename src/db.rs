@@ -3,8 +3,8 @@ use std::hash::{Hash, Hasher};
 use std::net::{Ipv4Addr, Ipv6Addr, IpAddr};
 use std::str::FromStr;
 use super::dns;
-use trust_dns::rr::{RecordType, RData};
-use trust_dns::rr;
+use trust_dns_client::rr::{RecordType, RData};
+use trust_dns_client::rr;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum RServer {

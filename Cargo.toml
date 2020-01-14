@@ -5,4 +5,4 @@ authors = ["Josh Driver <josh@netcraft.com.au>"]
 edition = "2018"
 
 [dependencies]
-trust-dns = "0.16"
+trust-dns-client = "0.18"

@@ -1,10 +1,10 @@
 use std::net::{Ipv4Addr, Ipv6Addr, IpAddr};
 use std::str::FromStr;
-use trust_dns::client::{Client,ClientConnection, ClientStreamHandle, SyncClient};
-use trust_dns::error::{ClientErrorKind, ClientResult};
-use trust_dns::op::DnsResponse;
-use trust_dns::rr;
-use trust_dns::udp::UdpClientConnection;
+use trust_dns_client::client::{Client,ClientConnection, ClientHandle, SyncClient};
+use trust_dns_client::error::{ClientErrorKind, ClientResult};
+use trust_dns_client::op::DnsResponse;
+use trust_dns_client::rr;
+use trust_dns_client::udp::UdpClientConnection;
 use crate::db;
 
 /// Perform a DNS query.

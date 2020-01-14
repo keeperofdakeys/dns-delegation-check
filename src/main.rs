@@ -1,5 +1,5 @@
 use std::str::FromStr;
-use trust_dns::rr;
+use trust_dns_client::rr;
 
 mod db;
 mod dns;
