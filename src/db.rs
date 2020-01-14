@@ -61,6 +61,7 @@ pub struct RecordDB {
   answer_targets: HashSet<(rr::Name, rr::RecordType)>,
   targets: HashSet<(rr::Name, rr::RecordType, rr::Name)>,
   query_queue: VecDeque<(rr::Name, rr::RecordType, IpAddr)>,
+  change_num: u64,
 }
 
 impl RecordDB {
@@ -70,6 +71,7 @@ impl RecordDB {
       targets: HashSet::new(),
       answer_targets: HashSet::new(),
       query_queue: VecDeque::new(),
+      change_num: 0,
     }
   }
 
@@ -116,6 +118,7 @@ impl RecordDB {
 
   // Add a record to the database, marking that its from the specificed NS IP.
   pub fn add_record(&mut self, record: &rr::Record, server_ip: IpAddr) {
+    self.change_num += 1;
     self.records
       .entry(record.name().clone()).or_insert_with(|| BTreeMap::new())
       .entry(server_ip.into())
@@ -131,6 +134,7 @@ impl RecordDB {
   }
 
   pub fn add_rentry(&mut self, name: &rr::Name, rentry: REntry, server_ip: IpAddr) {
+    self.change_num += 1;
     self.records
       .entry(name.clone()).or_insert_with(|| BTreeMap::new())
       .entry(server_ip.into())
@@ -188,6 +192,7 @@ impl RecordDB {
     self.answer_targets.insert((name.clone(), rtype));
     // TODO: Remove unwrap
     self.targets.insert((name.clone(), rtype, rr::Name::from_str(".").unwrap()));
+    self.change_num += 1;
   }
 
   /// Add a domain, rtype and target zone as a target.
@@ -195,6 +200,7 @@ impl RecordDB {
   /// Unlike answer targets, these areused as stepping stones internally.
   pub fn add_target(&mut self, name: &rr::Name, rtype: rr::RecordType, zone: &rr::Name) {
     self.targets.insert((name.clone(), rtype, zone.clone()));
+    self.change_num += 1;
   }
 
   /// Given a domain, find the longest matching domain in the database that
@@ -321,6 +327,7 @@ impl RecordDB {
             for ip in &ns_ips {
               let ip = ip.to_ip_addr().unwrap();
               self.query_queue.push_front((name.clone(), rtype.clone(), ip));
+              self.change_num += 1;
             }
           }
         }
@@ -335,6 +342,17 @@ impl RecordDB {
       // TODO: We should be parsing results here.
       // TODO: How do we do mocking here?
       super::dns::query_record(self, ip, name, rtype);
+    }
+  }
+
+  pub fn action_loop(&mut self) {
+    let mut change_num = 0;
+
+    while change_num != self.change_num {
+      change_num = self.change_num;
+      println!("loop {}", change_num);
+      self.generate_queries();
+      self.perform_queries();
     }
   }
 

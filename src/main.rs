@@ -18,10 +18,8 @@ fn main() {
   dns::query_record(&mut records, "8.8.8.8".parse().unwrap(),
                     rr::Name::from_str("google.com.").unwrap(), rr::RecordType::NS);
 
+  records.action_loop();
   records.generate_queries();
-  records.perform_queries();
-  records.generate_queries();
-  records.perform_queries();
   records.dump();
 
   //println!("{:#?}", records);
