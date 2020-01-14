@@ -1,6 +1,6 @@
-use std::net::{Ipv4Addr, Ipv6Addr, IpAddr};
+use std::net::{IpAddr};
 use std::str::FromStr;
-use trust_dns_client::client::{Client,ClientConnection, ClientHandle, SyncClient};
+use trust_dns_client::client::{Client, ClientHandle, SyncClient};
 use trust_dns_client::error::{ClientErrorKind, ClientResult};
 use trust_dns_client::op::DnsResponse;
 use trust_dns_client::rr;
