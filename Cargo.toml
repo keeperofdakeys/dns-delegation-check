@@ -5,6 +5,6 @@ authors = ["Josh Driver <josh@netcraft.com.au>"]
 edition = "2018"
 
 [dependencies]
-trust-dns-client = "0.18"
+trust-dns-client = "0.19"
 log = "0.4"
 env_logger = "0.7"
