@@ -58,16 +58,18 @@ impl Hash for RDataHash {
 
 #[derive(Debug)]
 pub struct RecordDB {
+  delegations: BTreeMap<(rr::Name, rr::Name), HashSet<(rr::Name, rr::Name)>>,
   records: BTreeMap<rr::Name, BTreeMap<RServer, REntry>>,
   answer_targets: HashSet<(rr::Name, rr::RecordType)>,
   targets: HashSet<(rr::Name, rr::RecordType, rr::Name)>,
-  query_queue: VecDeque<(rr::Name, rr::RecordType, IpAddr)>,
+  query_queue: VecDeque<(rr::Name, rr::RecordType, IpAddr, Option<rr::Name>)>,
   change_num: u64,
 }
 
 impl RecordDB {
   pub fn new() -> RecordDB {
     RecordDB {
+      delegations: BTreeMap::new(),
       records: BTreeMap::new(),
       targets: HashSet::new(),
       answer_targets: HashSet::new(),
@@ -116,6 +118,15 @@ impl RecordDB {
           *e = REntry::Entries(vec![rdata.clone()]);
         }).or_insert_with(|| REntry::Entries(vec![rdata.clone()]));
     }
+  }
+
+  /// Add a delegation.
+  pub fn add_delegation(&mut self, name: &rr::Name, zone: &rr::Name,
+                        auth_zone: &rr::Name, auth_ns: &rr::Name) {
+    self.change_num += 1;
+    self.delegations
+      .entry((name.clone(), zone.clone())).or_insert_with(|| HashSet::new())
+      .insert((auth_zone.clone(), auth_ns.clone()));
   }
 
   // Add a record to the database, marking that its from the specificed NS IP.
@@ -343,7 +354,8 @@ impl RecordDB {
             missing_entries += 1;
             for ip in &ns_ips {
               let ip = ip.to_ip_addr().unwrap();
-              self.query_queue.push_front((name.clone(), rtype.clone(), ip));
+              self.query_queue.push_front((name.clone(), rtype.clone(),
+                                          ip, Some(zone.clone())));
               self.change_num += 1;
             }
           }
@@ -355,10 +367,10 @@ impl RecordDB {
   /// Perform queries from queue.
   pub fn perform_queries(&mut self) {
     while let Some(query) = self.query_queue.pop_front() {
-      let (name, rtype, ip) = query;
+      let (name, rtype, ip, zone) = query;
       // TODO: We should be parsing results here.
       // TODO: How do we do mocking here?
-      super::dns::query_record(self, ip, name, rtype);
+      super::dns::query_record(self, ip, name, rtype, zone);
     }
   }
 
@@ -375,6 +387,14 @@ impl RecordDB {
 
   /// Dump database to stdout.
   pub fn dump (&self) {
+    println!("Delegations");
+
+    for ((name, zone), delegations) in &self.delegations {
+      println!("  {} {}", name, zone);
+      for (zone, ns) in delegations {
+        println!("    {} {}", zone, ns);
+      }
+    }
     println!("Answer Targets");
 
     for (name, rtype) in &self.answer_targets {
@@ -389,7 +409,7 @@ impl RecordDB {
 
     println!("Query Queue");
 
-    for (name, rtype, ip) in &self.query_queue {
+    for (name, rtype, ip, zone) in &self.query_queue {
       println!("  {} {} {}", name, rtype, ip);
     }
 

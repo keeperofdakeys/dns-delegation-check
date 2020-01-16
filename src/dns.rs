@@ -28,7 +28,8 @@ pub fn do_dns_query(server_ip: IpAddr, name: &rr::Name, record_type: rr::RecordT
 
 /// Query a givern record and add it to database.
 pub fn query_record(record_db: &mut db::RecordDB, server_ip: IpAddr,
-                    name: rr::Name, record_type: rr::RecordType) {
+                    name: rr::Name, record_type: rr::RecordType,
+                    zone: Option<rr::Name>) {
   debug!("Query record {}, {}, {}", name, record_type, server_ip);
 
   let result = match do_dns_query(server_ip, &name, record_type) {
@@ -65,6 +66,12 @@ pub fn query_record(record_db: &mut db::RecordDB, server_ip: IpAddr,
     for rec in msg.name_servers() {
       // Add record.
       record_db.add_record(rec, server_ip);
+
+      if let Some(ns) = rec.rdata().as_ns() {
+        if let Some(zone) = &zone {
+          record_db.add_delegation(&name, &zone, rec.name(), ns);
+        }
+      }
 
       // If this is an answer target, add new target for given new authoritative zone.
       if record_db.is_answer_target(&name, record_type) {
