@@ -15,6 +15,7 @@ fn main() {
   records.add_root_hints(dns::root_hints());
 
   records.add_answer_target(&rr::Name::from_str("google.com").unwrap(), rr::RecordType::AAAA);
+  records.add_answer_target(&rr::Name::from_str("cloudflare.com").unwrap(), rr::RecordType::A);
 
   // println!("{:#?}", records.find_closest_domain(&rr::Name::from_str("google.com.").unwrap()));
 

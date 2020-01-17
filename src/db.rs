@@ -58,10 +58,12 @@ impl Hash for RDataHash {
 
 #[derive(Debug)]
 pub struct RecordDB {
-  delegations: BTreeMap<(rr::Name, rr::Name), HashSet<(rr::Name, rr::Name)>>,
+  // FIXME: Probably want Name -> (RServer -> (RType > Rentry)).
+  //        Need to store NoEntry per RType.
   records: BTreeMap<rr::Name, BTreeMap<RServer, REntry>>,
   answer_targets: HashSet<(rr::Name, rr::RecordType)>,
   targets: HashSet<(rr::Name, rr::RecordType, rr::Name)>,
+  delegations: BTreeMap<(rr::Name, rr::Name), HashSet<(rr::Name, rr::Name)>>,
   query_queue: VecDeque<(rr::Name, rr::RecordType, IpAddr, Option<rr::Name>)>,
   change_num: u64,
 }
@@ -69,10 +71,10 @@ pub struct RecordDB {
 impl RecordDB {
   pub fn new() -> RecordDB {
     RecordDB {
-      delegations: BTreeMap::new(),
       records: BTreeMap::new(),
       targets: HashSet::new(),
       answer_targets: HashSet::new(),
+      delegations: BTreeMap::new(),
       query_queue: VecDeque::new(),
       change_num: 0,
     }
@@ -133,6 +135,7 @@ impl RecordDB {
   pub fn add_record(&mut self, record: &rr::Record, server_ip: IpAddr) {
     trace!("Add record {}, {:?}, {}", record.name(), record.rdata(), server_ip);
     self.change_num += 1;
+    // FIXME: currently inserts duplicate entries.
     self.records
       .entry(record.name().clone()).or_insert_with(|| BTreeMap::new())
       .entry(server_ip.into())
@@ -336,17 +339,17 @@ impl RecordDB {
       // Get list of NS servers for zone.
       let zone_ns = self.get_record_set(zone, rr::RecordType::NS);
 
-      // For each NS server of zone, ensure an answer exists for name
-      // from that NS server.
+      // For each NS server of zone, ensure an answer exists for target
+      // name from that NS server.
       for ns in zone_ns {
         let ns = ns.as_ns().unwrap();
 
           // FIXME: Do I want record set for zone instead of ns?
           // If no domain record for ns, then no a records possible?
         let ns_ips = self.get_record_set(&ns, rr::RecordType::A);
-        if ns_ips.len() == 0 {
-          missing_entries += 1;
-        }
+        // if ns_ips.len() == 0 {
+        //   missing_entries += 1;
+        // }
 
         for ip in &ns_ips {
           let ip = ip.to_ip_addr().unwrap();
@@ -359,6 +362,48 @@ impl RecordDB {
               self.change_num += 1;
             }
           }
+        }
+      }
+    }
+
+    let answer_zones: HashSet<_> = self.targets.iter()
+      .filter_map(|(name, rtype, zone)| {
+        if self.answer_targets.contains(&(name.clone(), *rtype)) {
+          Some(zone.clone())
+        } else {
+          None
+        }
+      }).collect();
+
+    // Ensure each answer zone has an NS record from every NS server in its zone.
+    for zone in &answer_zones {
+      // Ensure domain exists in answers.
+      let zone_records = self.get_records(zone);
+
+      // TODO: Also do this for parent NS servers.
+      // Get list of NS servers for zone.
+      let zone_ns = self.get_record_set(zone, rr::RecordType::NS);
+
+      // For each NS server of zone, ensure an answer exists for target
+      // name from that NS server.
+      for ns in zone_ns {
+        let ns = ns.as_ns().unwrap();
+        let ns_ips = self.get_record_set(&ns, rr::RecordType::A);
+
+        for ip in &ns_ips {
+          let ip = ip.to_ip_addr().unwrap();
+
+          // Ensure the zone has an NS record for each NS server in zone..
+          if !zone_records.contains_key(&ip.into()) {
+            missing_entries += 1;
+            for ip in &ns_ips {
+              let ip = ip.to_ip_addr().unwrap();
+              self.query_queue.push_back((zone.clone(), rr::RecordType::NS, ip, None));
+              self.change_num += 1;
+            }
+          }
+
+          // Ensure each NS server has an A record from each NS server in zone.
         }
       }
     }
