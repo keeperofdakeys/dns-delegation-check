@@ -60,7 +60,7 @@ impl Hash for RDataHash {
 pub struct RecordDB {
   // FIXME: Probably want Name -> (RServer -> (RType > Rentry)).
   //        Need to store NoEntry per RType.
-  records: BTreeMap<rr::Name, BTreeMap<RServer, REntry>>,
+  records: BTreeMap<rr::Name, BTreeMap<RServer, BTreeMap<rr::RecordType, REntry>>>,
   answer_targets: HashSet<(rr::Name, rr::RecordType)>,
   targets: HashSet<(rr::Name, rr::RecordType, rr::Name)>,
   delegations: BTreeMap<(rr::Name, rr::Name), HashSet<(rr::Name, rr::Name)>>,
@@ -96,7 +96,8 @@ impl RecordDB {
 
       self.records
         .entry(name.clone()).or_insert_with(|| BTreeMap::new())
-        .entry(RServer::Hint).and_modify(|e| {
+        .entry(RServer::Hint).or_insert_with(|| BTreeMap::new())
+        .entry(rdata.to_record_type()).and_modify(|e| {
           if let REntry::Entries(v) = e {
             v.push(rdata.clone());
             return;
@@ -110,7 +111,8 @@ impl RecordDB {
 
       self.records
       .entry(rr::Name::from_str(".").unwrap()).or_insert_with(|| BTreeMap::new())
-      .entry(RServer::Hint).and_modify(|e| {
+      .entry(RServer::Hint).or_insert_with(|| BTreeMap::new())
+      .entry(rr::RecordType::NS).and_modify(|e| {
           if let REntry::Entries(v) = e {
             v.push(rdata.clone());
             return;
@@ -135,13 +137,19 @@ impl RecordDB {
   pub fn add_record(&mut self, record: &rr::Record, server_ip: IpAddr) {
     trace!("Add record {}, {:?}, {}", record.name(), record.rdata(), server_ip);
     self.change_num += 1;
-    // FIXME: currently inserts duplicate entries.
+    let name = record.name();
+    let rdata = record.rdata();
+    let rtype = rdata.to_record_type();
     self.records
-      .entry(record.name().clone()).or_insert_with(|| BTreeMap::new())
-      .entry(server_ip.into())
-      .and_modify(|e| {
+      .entry(name.clone()).or_insert_with(|| BTreeMap::new())
+      .entry(server_ip.into()).or_insert_with(|| BTreeMap::new())
+      .entry(rtype).and_modify(|e| {
         match e {
-          REntry::Entries(v) => v.push(record.rdata().clone()),
+          REntry::Entries(v) => {
+            if !v.contains(record.rdata()) {
+              v.push(record.rdata().clone())
+            }
+          },
           e @ REntry::TimeOut =>
             *e = REntry::Entries(vec![record.rdata().clone()]),
           e @ REntry::NoEntry =>
@@ -150,13 +158,14 @@ impl RecordDB {
       }).or_insert_with(|| REntry::Entries(vec![record.rdata().clone()]));
   }
 
-  pub fn add_rentry(&mut self, name: &rr::Name, rentry: REntry, server_ip: IpAddr) {
+  pub fn add_rentry(&mut self, name: &rr::Name, rentry: REntry,
+                    rtype: rr::RecordType, server_ip: IpAddr) {
     trace!("Add rentry {}, {:?}, {}", name, rentry, server_ip);
     self.change_num += 1;
     self.records
       .entry(name.clone()).or_insert_with(|| BTreeMap::new())
-      .entry(server_ip.into())
-      .and_modify(|e| {
+      .entry(server_ip.into()).or_insert_with(|| BTreeMap::new())
+      .entry(rtype).and_modify(|e| {
         match e {
           REntry::Entries(_) => (),
           e @ REntry::TimeOut =>
@@ -172,7 +181,7 @@ impl RecordDB {
 
   /// For the given domain name, retrieve all records for all NS IPs under it.
   pub fn get_records(&self, name: &rr::Name)
-    -> BTreeMap<RServer, REntry> {
+    -> BTreeMap<RServer, BTreeMap<rr::RecordType, REntry>> {
     match self.records.get(name) {
       Some(s) => s.clone(),
       None => BTreeMap::new(),
@@ -192,8 +201,8 @@ impl RecordDB {
 
     let mut records = HashSet::new();
 
-    for (server, entry) in servers {
-      if let REntry::Entries(items) = entry {
+    for (server, entries) in servers {
+      if let Some(REntry::Entries(items)) = entries.get(&rtype) {
         for item in items {
           if item.to_record_type() == rtype {
             records.insert(RDataHash(item.clone()));
@@ -463,16 +472,18 @@ impl RecordDB {
     for (name, entries) in &self.records {
       println!("Domain: {}", name);
 
-      for (ip, entry) in entries {
-        println!("  Server IP: {:?}", ip);
-        match entry {
-          REntry::Entries(v) => {
-            for rdata in v {
-              println!("    Entries");
-              println!("      {:?}", rdata);
-            }
-          },
-          e => println!("    {:?}", e),
+      for (ip, entries) in entries {
+        for (rtype, entry) in entries {
+          println!("  Server IP: {:?}, RType {:?}", ip, rtype);
+          match entry {
+            REntry::Entries(v) => {
+              for rdata in v {
+                println!("    Entries");
+                println!("      {:?}", rdata);
+              }
+            },
+            e => println!("    {:?}", e),
+          }
         }
       }
     }

@@ -38,7 +38,7 @@ pub fn query_record(record_db: &mut db::RecordDB, server_ip: IpAddr,
       match e.kind() {
         // TODO: Add retries on timeout.
         ClientErrorKind::Timeout =>
-          record_db.add_rentry(&name, db::REntry::TimeOut, server_ip),
+          record_db.add_rentry(&name, db::REntry::TimeOut, record_type, server_ip),
         // FIXME: More appropriate error?
         _ => unimplemented!("We don't handle this  error yet: {}", e),
       };
@@ -81,7 +81,7 @@ pub fn query_record(record_db: &mut db::RecordDB, server_ip: IpAddr,
   }
 
   if !has_answer {
-    record_db.add_rentry(&name, db::REntry::NoEntry, server_ip);
+    record_db.add_rentry(&name, db::REntry::NoEntry, record_type, server_ip);
   }
 }
 
